@@ -8,6 +8,47 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// --- Handler Functions ---
+
+func createPost(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", 405)
+        return
+    }
+
+    var post struct {
+        Title   string `json:"title"`
+        Content string `json:"content"`
+    }
+    json.NewDecoder(r.Body).Decode(&post)
+
+    _, err := db.Exec("INSERT INTO posts (title, content) VALUES (?, ?)", post.Title, post.Content)
+    if err != nil {
+        http.Error(w, "Server error", 500)
+        return
+    }
+    w.Write([]byte("Post created successfully"))
+}
+
+func getPosts(w http.ResponseWriter, r *http.Request) {
+    rows, err := db.Query("SELECT id, title, content FROM posts ORDER BY created_at DESC")
+    if err != nil {
+        http.Error(w, "Server error", 500)
+        return
+    }
+    defer rows.Close()
+
+    var posts []map[string]interface{}
+    for rows.Next() {
+        var id int
+        var title, content string
+        rows.Scan(&id, &title, &content)
+        posts = append(posts, map[string]interface{}{
+            "id": id, "title": title, "content": content,
+        })
+    }
+    json.NewEncoder(w).Encode(posts)
+}
 func main() {
 	connectDB()
 	
@@ -15,6 +56,8 @@ func main() {
 
 	http.HandleFunc("/register", register)
 	http.HandleFunc("/login", login)
+	http.HandleFunc("/create-post", createPost)
+	http.HandleFunc("/get-posts", getPosts)
 
 	log.Println("Server running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -30,7 +73,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 		Email    string
 		Password string
 	}
-
+ 
 	json.NewDecoder(r.Body).Decode(&data)
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte(data.Password), 10)

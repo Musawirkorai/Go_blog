@@ -33,3 +33,44 @@ function login() {
     })
     .catch(() => alert("Invalid email or password"));
 }
+
+
+
+function createPost() {
+  const title = document.getElementById("postTitle").value;
+  const content = document.getElementById("postContent").value;
+
+  fetch("http://localhost:8080/create-post", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, content }),
+  })
+    .then((res) => res.text())
+    .then((msg) => {
+      alert(msg);
+      location.reload(); // Refresh to see the new post
+    });
+}
+
+function getPosts() {
+  fetch("http://localhost:8080/get-posts")
+    .then((res) => res.json())
+    .then((posts) => {
+      const feed = document.getElementById("blogFeed");
+      if (!posts || posts.length === 0) {
+        feed.innerHTML = `<div class="post-card" style="text-align:center;">No posts yet. Start the conversation!</div>`;
+        return;
+      }
+      
+      feed.innerHTML = posts.map(post => `
+        <article class="post-card">
+          <h3>${post.title}</h3>
+          <p>${post.content}</p>
+          <div class="post-meta">
+            <span>By Anonymous</span>
+            <span>${new Date().toLocaleDateString()}</span>
+          </div>
+        </article>
+      `).join("");
+    });
+}

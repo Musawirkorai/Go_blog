@@ -1,15 +1,23 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Home</title>
-  <link rel="stylesheet" href="style.css">
-</head>
+<link rel="stylesheet" href="style.css">
 <body>
+  <div class="home-container">
+    <header class="home-header">
+        <h1>DevFeast</h1>
+        <p>Welcome back, <strong id="username">Writer</strong></p>
+    </header>
 
-<div class="home">
-  <h1>Welcome to the Blog 🚀</h1>
-  <p>Start reading and writing amazing blogs</p>
+    <div class="editor-card">
+        <h2>Create a Masterpiece</h2>
+        <input type="text" id="postTitle" placeholder="Catchy Title...">
+        <textarea id="postContent" placeholder="Write your thoughts here..."></textarea>
+        <button onclick="createPost()">Publish Story</button>
+    </div>
+
+    <h2 style="margin-bottom: 25px;">The Feed</h2>
+    <div id="blogFeed">
+        </div>
 </div>
 
+  <script src="script.js"></script>
+  <script>window.onload = getPosts;</script>
 </body>
-</html>
