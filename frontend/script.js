@@ -70,7 +70,28 @@ function getPosts() {
             <span>By Anonymous</span>
             <span>${new Date().toLocaleDateString()}</span>
           </div>
+            <div class="post-actions">
+              <button class="delete-btn" onclick="deleteBlog(${post.id})">
+                Delete
+              </button>
+            </div>
         </article>
       `).join("");
     });
+}
+function deleteBlog(id) {
+  if (!confirm("Are you sure you want to delete this story?")) return;
+
+  fetch(`http://localhost:8080/delete-blog?id=${id}`, {
+    method: "DELETE"
+  })
+  .then(res => res.text())
+  .then(msg => {
+    alert(msg);
+    getPosts(); // reload posts without full page refresh
+  })
+  .catch(err => {
+    console.error(err);
+    alert("Failed to delete post");
+  });
 }

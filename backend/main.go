@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -49,6 +50,35 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
     }
     json.NewEncoder(w).Encode(posts)
 }
+func deleteBlog(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodDelete {
+        http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+        return
+    }
+
+    id := r.URL.Query().Get("id")
+    if id == "" {
+        http.Error(w, "Blog ID is required", http.StatusBadRequest)
+        return
+    }
+
+   	result, err := db.Exec("DELETE FROM posts WHERE id = ?", id)
+
+    if err != nil {
+        fmt.Println("DELETE ERROR:", err) // 👈 VERY IMPORTANT
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+
+    rowsAffected, _ := result.RowsAffected()
+    if rowsAffected == 0 {
+        http.Error(w, "No blog found with that ID", http.StatusNotFound)
+        return
+    }
+
+    w.Write([]byte("Blog deleted successfully"))
+}
+
 func main() {
 	connectDB()
 	
@@ -58,6 +88,8 @@ func main() {
 	http.HandleFunc("/login", login)
 	http.HandleFunc("/create-post", createPost)
 	http.HandleFunc("/get-posts", getPosts)
+	http.HandleFunc("/delete-blog", deleteBlog)
+
 
 	log.Println("Server running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

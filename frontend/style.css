@@ -142,3 +142,30 @@ button:hover {
   color: var(--primary);
   font-weight: 600;
 }
+
+.post-card {
+  background: #1e1e2f;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.post-actions {
+  margin-top: 15px;
+  text-align: right;
+}
+
+.delete-btn {
+  background: #ff4d4d;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.delete-btn:hover {
+  background: #cc0000;
+}
