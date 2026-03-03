@@ -89,6 +89,7 @@ func main() {
 	http.HandleFunc("/create-post", createPost)
 	http.HandleFunc("/get-posts", getPosts)
 	http.HandleFunc("/delete-blog", deleteBlog)
+	http.HandleFunc("/update-blog", updateBlog)
 
 
 	log.Println("Server running on http://localhost:8080")
@@ -156,4 +157,40 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte("Login successful"))
+}
+
+
+func updateBlog(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPut {
+        http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+        return
+    }
+
+    id := r.URL.Query().Get("id")
+    if id == "" {
+        http.Error(w, "ID is required", http.StatusBadRequest)
+        return
+    }
+
+    var post struct {
+        Title   string `json:"title"`
+        Content string `json:"content"`
+    }
+
+    err := json.NewDecoder(r.Body).Decode(&post)
+    if err != nil {
+        http.Error(w, "Invalid data", http.StatusBadRequest)
+        return
+    }
+
+    _, err = db.Exec("UPDATE posts SET title=?, content=? WHERE id=?", 
+        post.Title, post.Content, id)
+
+    if err != nil {
+        fmt.Println("UPDATE ERROR:", err)
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+
+    w.Write([]byte("Blog updated successfully"))
 }

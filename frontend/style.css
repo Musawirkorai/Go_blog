@@ -169,3 +169,17 @@ button:hover {
 .delete-btn:hover {
   background: #cc0000;
 }
+.post-actions button {
+  background: #4da6ff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: 0.3s ease;
+}
+
+.post-actions button:hover {
+  background: #0066cc;
+}
