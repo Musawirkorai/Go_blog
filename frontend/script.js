@@ -30,6 +30,7 @@ function login() {
       return res.text();
     })
     .then(() => {
+      // localStorage.setItem("userEmail", email);
       window.location.href = "home.html";
     })
     .catch(() => alert("Invalid email or password"));
@@ -114,22 +115,17 @@ function getPosts() {
 }
 
 function deleteBlog(id) {
-  if (!confirm("Are you sure you want to delete this story?")) return;
+  const email = localStorage.getItem("userEmail");
 
-  fetch(`http://localhost:8080/delete-blog?id=${id}`, {
-    method: "DELETE",
+  fetch(`http://localhost:8080/delete-post?id=${id}&email=${email}`, {
+    method: "DELETE"
   })
-    .then((res) => res.text())
-    .then((msg) => {
-      alert(msg);
-      getPosts(); // reload posts without full page refresh
-    })
-    .catch((err) => {
-      console.error(err);
-      alert("Failed to delete post");
-    });
+  .then(res => res.text())
+  .then(msg => {
+    alert(msg);
+    getPosts();
+  });
 }
-
 function editBlog(id, title, content) {
   document.getElementById("postTitle").value = title;
   document.getElementById("postContent").value = content;

@@ -50,35 +50,40 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
     }
     json.NewEncoder(w).Encode(posts)
 }
-func deleteBlog(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodDelete {
-        http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-        return
-    }
+
+func deletePost(w http.ResponseWriter, r *http.Request) {
 
     id := r.URL.Query().Get("id")
-    if id == "" {
-        http.Error(w, "Blog ID is required", http.StatusBadRequest)
+    email := r.URL.Query().Get("email")
+
+    if id == "" || email == "" {
+        http.Error(w, "Missing data", http.StatusBadRequest)
         return
     }
 
-   	result, err := db.Exec("DELETE FROM posts WHERE id = ?", id)
+    // Check author
+    var authorEmail string
+    err := db.QueryRow("SELECT author_email FROM posts WHERE id = ?", id).
+        Scan(&authorEmail)
 
     if err != nil {
-        fmt.Println("DELETE ERROR:", err) // 👈 VERY IMPORTANT
-        http.Error(w, "Database error", http.StatusInternalServerError)
+        http.Error(w, "Post not found", http.StatusNotFound)
         return
     }
 
-    rowsAffected, _ := result.RowsAffected()
-    if rowsAffected == 0 {
-        http.Error(w, "No blog found with that ID", http.StatusNotFound)
+    if authorEmail != email {
+        http.Error(w, "Unauthorized action", http.StatusForbidden)
         return
     }
 
-    w.Write([]byte("Blog deleted successfully"))
+    _, err = db.Exec("DELETE FROM posts WHERE id = ?", id)
+    if err != nil {
+        http.Error(w, "Delete failed", http.StatusInternalServerError)
+        return
+    }
+
+    w.Write([]byte("Post deleted successfully"))
 }
-
 func main() {
 	connectDB()
 	
@@ -88,7 +93,8 @@ func main() {
 	http.HandleFunc("/login", login)
 	http.HandleFunc("/create-post", createPost)
 	http.HandleFunc("/get-posts", getPosts)
-	http.HandleFunc("/delete-blog", deleteBlog)
+	// http.HandleFunc("/delete-blog", deleteBlog)
+    http.HandleFunc("/delete-post", deletePost)
 	http.HandleFunc("/update-blog", updateBlog)
 
 
