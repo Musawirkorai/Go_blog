@@ -1,24 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Sign Up</title>
+  <title>Sign Up - DevFeast</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="card">
-  <h2>Create Account</h2>
+  <div class="card-header">
+    <h1 class="brand">DevFeast</h1>
+    <h2>Create Account</h2>
+    <p>Join the community of writers and readers</p>
+  </div>
 
   <input id="name" placeholder="Full Name">
   <input id="email" placeholder="Email">
   <input id="password" type="password" placeholder="Password">
 
-  <button onclick="register()">Sign Up</button>
+  <select id="role">
+    <option value="reader">Reader — Browse & read posts</option>
+    <option value="writer">Writer — Publish & manage posts</option>
+  </select>
+
+  <button onclick="registerUser()">Create Account</button>
 
   <div class="link">
-    <p>Already have an account?
-      <a href="index.html">Login</a>
-    </p>
+    <p>Already have an account? <a href="index.html">Login</a></p>
   </div>
 </div>
 

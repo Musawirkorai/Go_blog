@@ -1,19 +1,58 @@
 let editingId = null;
-function register() {
+
+// - Helper: get session from localStorage
+function getSession() {
+  return {
+    email: localStorage.getItem("userEmail"),
+    role: localStorage.getItem("userRole"),
+    name: localStorage.getItem("userName"),
+  };
+}
+
+// - Helper: build auth headers
+function authHeaders() {
+  const { email, role } = getSession();
+  return {
+    "Content-Type": "application/json",
+    "X-User-Email": email || "",
+    "X-User-Role": role || "",
+  };
+}
+
+//Renamed from register() to avoid browser built-in conflict
+function registerUser() {
+  const nameVal = document.getElementById("name")?.value?.trim();
+  const emailVal = document.getElementById("email")?.value?.trim();
+  const passwordVal = document.getElementById("password")?.value;
+  const roleVal = document.getElementById("role")?.value || "reader";
+
+  if (!nameVal || !emailVal || !passwordVal) {
+    alert("Please fill in all fields");
+    return;
+  }
+
   fetch("http://localhost:8080/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      name: name.value,
-      email: email.value,
-      password: password.value,
+      name: nameVal,
+      email: emailVal,
+      password: passwordVal,
+      role: roleVal,
     }),
   })
-    .then((res) => res.text())
+    .then((res) => {
+      if (!res.ok)
+        return res.text().then((t) => {
+          throw new Error(t);
+        });
+      return res.text();
+    })
     .then((msg) => {
       alert(msg);
       window.location.href = "index.html";
-    });
+    })
+    .catch((err) => alert("Signup failed: " + err.message));
 }
 
 function login() {
@@ -21,16 +60,19 @@ function login() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: loginEmail.value,
-      password: loginPassword.value,
+      email: document.getElementById("loginEmail").value,
+      password: document.getElementById("loginPassword").value,
     }),
   })
     .then((res) => {
       if (!res.ok) throw new Error("Login failed");
-      return res.text();
+      return res.json(); // - Now returns JSON with role
     })
-    .then(() => {
-      // localStorage.setItem("userEmail", email);
+    .then((user) => {
+      // - Store session
+      localStorage.setItem("userEmail", user.email);
+      localStorage.setItem("userRole", user.role);
+      localStorage.setItem("userName", user.name);
       window.location.href = "home.html";
     })
     .catch(() => alert("Invalid email or password"));
@@ -46,10 +88,9 @@ function createPost() {
   }
 
   if (editingId) {
-    // UPDATE
     fetch(`http://localhost:8080/update-blog?id=${editingId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(), // - Send auth
       body: JSON.stringify({ title, content }),
     })
       .then((res) => res.text())
@@ -59,10 +100,9 @@ function createPost() {
         getPosts();
       });
   } else {
-    // CREATE
     fetch("http://localhost:8080/create-post", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(), // - Send auth
       body: JSON.stringify({ title, content }),
     })
       .then((res) => res.text())
@@ -75,6 +115,21 @@ function createPost() {
 }
 
 function getPosts() {
+  const { email, role } = getSession();
+  const isWriter = role === "writer";
+
+  // Show/hide editor based on role
+  const editorCard = document.querySelector(".editor-card");
+  if (editorCard) {
+    editorCard.style.display = isWriter ? "block" : "none";
+  }
+
+  // Show username
+  const usernameEl = document.getElementById("username");
+  if (usernameEl) {
+    usernameEl.textContent = localStorage.getItem("userName") || "Guest";
+  }
+
   fetch("http://localhost:8080/get-posts")
     .then((res) => res.json())
     .then((posts) => {
@@ -90,46 +145,47 @@ function getPosts() {
       }
 
       feed.innerHTML = posts
-        .map(
-          (post) => `
-        <article class="post-card">
-          <h3>${post.title}</h3>
-          <p>${post.content}</p>
-          <div class="post-meta">
-            <span>By Anonymous</span>
-            <span>${new Date().toLocaleDateString()}</span>
-          </div>
-          <div class="post-actions">
-            <button onclick="editBlog(${post.id}, \`${post.title}\`, \`${post.content}\`)">
-              Edit
-            </button>
-            <button class="delete-btn" onclick="deleteBlog(${post.id})">
-              Delete
-            </button>
-          </div>
-        </article>
-      `,
-        )
+        .map((post) => {
+          // - Only show edit/delete to the post's own author
+          const isOwner = isWriter && post.author_email === email;
+          const actions = isOwner
+            ? `<div class="post-actions">
+                <button onclick="editBlog(${post.id}, \`${post.title}\`, \`${post.content}\`)">Edit</button>
+                <button class="delete-btn" onclick="deleteBlog(${post.id})">Delete</button>
+               </div>`
+            : "";
+
+          return `
+            <article class="post-card">
+              <h3>${post.title}</h3>
+              <p>${post.content}</p>
+              <div class="post-meta">
+                <span>By ${post.author_email}</span>
+                <span>${new Date().toLocaleDateString()}</span>
+              </div>
+              ${actions}
+            </article>
+          `;
+        })
         .join("");
     });
 }
 
 function deleteBlog(id) {
-  const email = localStorage.getItem("userEmail");
-
-  fetch(`http://localhost:8080/delete-post?id=${id}&email=${email}`, {
-    method: "DELETE"
+  fetch(`http://localhost:8080/delete-post?id=${id}`, {
+    method: "DELETE",
+    headers: authHeaders(), //  Email in header, not URL
   })
-  .then(res => res.text())
-  .then(msg => {
-    alert(msg);
-    getPosts();
-  });
+    .then((res) => res.text())
+    .then((msg) => {
+      alert(msg);
+      getPosts();
+    });
 }
+
 function editBlog(id, title, content) {
   document.getElementById("postTitle").value = title;
   document.getElementById("postContent").value = content;
-
   editingId = id;
 
   const btn = document.querySelector(".editor-card button");
