@@ -82,9 +82,11 @@ function login() {
 
 
 function logout() {
+  //it will remove all the tokens and sessions will be deleted to log out the user and also all the user information will be removed from the local storage and then it will redirect to the login page
   localStorage.removeItem("userEmail");
   localStorage.removeItem("userRole");
   localStorage.removeItem("userName");
+  // Default page will be the index.html
   window.location.href = "index.html";
 }
 

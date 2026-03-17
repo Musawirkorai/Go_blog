@@ -247,7 +247,7 @@ func login(w http.ResponseWriter, r *http.Request) {
     })
 }
 
-// ✅ Reusable validation helper
+// ✅ Reusable validation helper so the empty blog is not uploaded on the DataBase in other words to prevent uploading empty Blog on the DataBase
 func validatePost(title, content string) string {
     if strings.TrimSpace(title) == "" {
         return "Title cannot be empty"
