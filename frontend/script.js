@@ -78,6 +78,23 @@ function login() {
     .catch(() => alert("Invalid email or password"));
 }
 
+
+
+
+function logout() {
+  localStorage.removeItem("userEmail");
+  localStorage.removeItem("userRole");
+  localStorage.removeItem("userName");
+  window.location.href = "index.html";
+}
+
+
+
+
+
+
+
+
 function createPost() {
   const title = document.getElementById("postTitle").value;
   const content = document.getElementById("postContent").value;
@@ -144,30 +161,35 @@ function getPosts() {
         return;
       }
 
-      feed.innerHTML = posts
-        .map((post) => {
-          // - Only show edit/delete to the post's own author
-          const isOwner = isWriter && post.author_email === email;
-          const actions = isOwner
-            ? `<div class="post-actions">
-                <button onclick="editBlog(${post.id}, \`${post.title}\`, \`${post.content}\`)">Edit</button>
-                <button class="delete-btn" onclick="deleteBlog(${post.id})">Delete</button>
-               </div>`
-            : "";
+     feed.innerHTML = posts
+      .map((post) => {
+        const isOwner = isWriter && post.author_email === email;
+        const actions = isOwner
+          ? `<div class="post-actions">
+              <button onclick="editBlog(${post.id}, \`${post.title}\`, \`${post.content}\`)">Edit</button>
+              <button class="delete-btn" onclick="deleteBlog(${post.id})">Delete</button>
+            </div>`
+          : "";
 
-          return `
-            <article class="post-card">
-              <h3>${post.title}</h3>
-              <p>${post.content}</p>
-              <div class="post-meta">
-                <span>By ${post.author_email}</span>
-                <span>${new Date().toLocaleDateString()}</span>
-              </div>
-              ${actions}
-            </article>
-          `;
-        })
-        .join("");
+        const dateStr = post.created_at
+          ? new Date(post.created_at).toLocaleDateString("en-US", {
+              year: "numeric", month: "short", day: "numeric"
+            })
+          : "Unknown date";
+
+        return `
+          <article class="post-card">
+            <h3>${post.title}</h3>
+            <p>${post.content}</p>
+            <div class="post-meta">
+              <span>By ${post.author_name}</span>
+              <span>${dateStr}</span>
+            </div>
+            ${actions}
+          </article>
+        `;
+      })
+      .join("");
     });
 }
 
@@ -200,3 +222,21 @@ function resetEditor() {
   const btn = document.querySelector(".editor-card button");
   btn.innerText = "Publish Story";
 }
+
+// ✅ Auth guard — runs on every page load
+function guardRoute() {
+  const protectedPages = ["home.html"];
+  const currentPage = window.location.pathname.split("/").pop();
+
+  if (protectedPages.includes(currentPage)) {
+    const email = localStorage.getItem("userEmail");
+    const role = localStorage.getItem("userRole");
+
+    if (!email || !role) {
+      alert("Please login first");
+      window.location.href = "index.html";
+    }
+  }
+}
+
+guardRoute(); // ✅ Call immediately on script load

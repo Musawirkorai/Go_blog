@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+    
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -44,6 +45,11 @@ func createPost(w http.ResponseWriter, r *http.Request) {
     }
     json.NewDecoder(r.Body).Decode(&post)
 
+    if errMsg := validatePost(post.Title, post.Content); errMsg != "" {
+        http.Error(w, errMsg, http.StatusBadRequest)
+        return
+    }
+
     _, err := db.Exec(
         "INSERT INTO posts (title, content, author_email) VALUES (?, ?, ?)",
         post.Title, post.Content, authorEmail,
@@ -54,9 +60,16 @@ func createPost(w http.ResponseWriter, r *http.Request) {
     }
     w.Write([]byte("Post created successfully"))
 }
-
 func getPosts(w http.ResponseWriter, r *http.Request) {
-    rows, err := db.Query("SELECT id, title, content, author_email FROM posts ORDER BY created_at DESC")
+    //  JOIN users table to get the author's real name
+    query := `
+        SELECT posts.id, posts.title, posts.content, 
+               users.name AS author_name, posts.created_at
+        FROM posts
+        JOIN users ON posts.author_email = users.email
+        ORDER BY posts.created_at DESC
+    `
+    rows, err := db.Query(query)
     if err != nil {
         http.Error(w, "Server error", 500)
         return
@@ -66,18 +79,18 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
     var posts []map[string]interface{}
     for rows.Next() {
         var id int
-        var title, content, authorEmail string
-        rows.Scan(&id, &title, &content, &authorEmail)
+        var title, content, authorName, createdAt string
+        rows.Scan(&id, &title, &content, &authorName, &createdAt)
         posts = append(posts, map[string]interface{}{
-            "id":           id,
-            "title":        title,
-            "content":      content,
-            "author_email": authorEmail,
+            "id":          id,
+            "title":       title,
+            "content":     content,
+            "author_name": authorName, // name not email
+            "created_at":  createdAt,
         })
     }
     json.NewEncoder(w).Encode(posts)
 }
-
 func deletePost(w http.ResponseWriter, r *http.Request) {
     id := r.URL.Query().Get("id")
     email := r.Header.Get("X-User-Email") // - From header, not query param
@@ -138,6 +151,12 @@ func updateBlog(w http.ResponseWriter, r *http.Request) {
         Title   string `json:"title"`
         Content string `json:"content"`
     }
+
+    if errMsg := validatePost(post.Title, post.Content); errMsg != "" {
+        http.Error(w, errMsg, http.StatusBadRequest)
+        return
+    }
+
     err = json.NewDecoder(r.Body).Decode(&post)
     if err != nil {
         http.Error(w, "Invalid data", http.StatusBadRequest)
@@ -226,6 +245,23 @@ func login(w http.ResponseWriter, r *http.Request) {
         "role":  role,
         "name":  name,
     })
+}
+
+// ✅ Reusable validation helper
+func validatePost(title, content string) string {
+    if strings.TrimSpace(title) == "" {
+        return "Title cannot be empty"
+    }
+    if strings.TrimSpace(content) == "" {
+        return "Content cannot be empty"
+    }
+    if len(title) > 100 {
+        return "Title must be under 100 characters"
+    }
+    if len(content) > 5000 {
+        return "Content must be under 5000 characters"
+    }
+    return "" // empty = valid
 }
 
 func main() {
