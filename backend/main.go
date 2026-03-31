@@ -61,15 +61,30 @@ func createPost(w http.ResponseWriter, r *http.Request) {
     w.Write([]byte("Post created successfully"))
 }
 func getPosts(w http.ResponseWriter, r *http.Request) {
-    //  JOIN users table to get the author's real name
+    //  Read page from query param e.g. /get-posts?page=1
+    pageStr := r.URL.Query().Get("page")
+    page := 1
+    if pageStr != "" {
+        fmt.Sscanf(pageStr, "%d", &page)
+    }
+    if page < 1 {
+        page = 1
+    }
+
+    limit := 5
+    offset := (page - 1) * limit
+
     query := `
-        SELECT posts.id, posts.title, posts.content, 
-               users.name AS author_name, posts.created_at
+        SELECT posts.id, posts.title, posts.content,
+               users.name AS author_name,
+               posts.author_email,
+               posts.created_at
         FROM posts
         JOIN users ON posts.author_email = users.email
         ORDER BY posts.created_at DESC
+        LIMIT ? OFFSET ?
     `
-    rows, err := db.Query(query)
+    rows, err := db.Query(query, limit, offset)
     if err != nil {
         http.Error(w, "Server error", 500)
         return
@@ -79,14 +94,15 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
     var posts []map[string]interface{}
     for rows.Next() {
         var id int
-        var title, content, authorName, createdAt string
-        rows.Scan(&id, &title, &content, &authorName, &createdAt)
+        var title, content, authorName, authorEmail, createdAt string
+        rows.Scan(&id, &title, &content, &authorName, &authorEmail, &createdAt)
         posts = append(posts, map[string]interface{}{
-            "id":          id,
-            "title":       title,
-            "content":     content,
-            "author_name": authorName, // name not email
-            "created_at":  createdAt,
+            "id":           id,
+            "title":        title,
+            "content":      content,
+            "author_name":  authorName,
+            "author_email": authorEmail,
+            "created_at":   createdAt,
         })
     }
     json.NewEncoder(w).Encode(posts)
@@ -247,7 +263,7 @@ func login(w http.ResponseWriter, r *http.Request) {
     })
 }
 
-// ✅ Reusable validation helper so the empty blog is not uploaded on the DataBase in other words to prevent uploading empty Blog on the DataBase
+//  Reusable validation helper so the empty blog is not uploaded on the DataBase in other words to prevent uploading empty Blog on the DataBase
 func validatePost(title, content string) string {
     if strings.TrimSpace(title) == "" {
         return "Title cannot be empty"

@@ -18,9 +18,26 @@
       ></textarea>
       <button onclick="createPost()">Publish Story</button>
     </div>
-
-    <h2 style="margin-bottom: 25px">The Feed</h2>
+    <div class="search-bar">
+      <input 
+        type="text" 
+        id="searchInput" 
+        placeholder="🔍 Search posts..." 
+        oninput="filterPosts()"
+      >
+    </div>
+    <h2 style="margin-bottom: 25px;">The Feed</h2>
     <div id="blogFeed"></div>
+    <div class="pagination">
+    <button onclick="changePage(-1)" id="prevBtn">← Prev</button>
+    <span id="pageLabel">Page 1</span>
+    <button onclick="changePage(1)" id="nextBtn">Next →</button>
+  </div>
+
+    
+<!-- 
+    <h2 style="margin-bottom: 25px">The Feed</h2>
+    <div id="blogFeed"></div> -->
   </div>
 
   <script src="script.js"></script>
