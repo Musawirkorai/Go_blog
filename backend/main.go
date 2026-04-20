@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-    
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,15 +29,12 @@ func writerOnly(next http.HandlerFunc) http.HandlerFunc {
         next(w, r)
     }
 }
-
 func createPost(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
-        http.Error(w, "Method not allowed", 405)
+        jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
     }
-
     authorEmail := r.Header.Get("X-User-Email")
-
     var post struct {
         Title   string `json:"title"`
         Content string `json:"content"`
@@ -46,19 +42,18 @@ func createPost(w http.ResponseWriter, r *http.Request) {
     json.NewDecoder(r.Body).Decode(&post)
 
     if errMsg := validatePost(post.Title, post.Content); errMsg != "" {
-        http.Error(w, errMsg, http.StatusBadRequest)
+        jsonError(w, errMsg, http.StatusBadRequest)
         return
     }
-
     _, err := db.Exec(
         "INSERT INTO posts (title, content, author_email) VALUES (?, ?, ?)",
-        post.Title, post.Content, authorEmail,
+        strings.TrimSpace(post.Title), strings.TrimSpace(post.Content), authorEmail,
     )
     if err != nil {
-        http.Error(w, "Server error", 500)
+        jsonError(w, "Failed to create post", http.StatusInternalServerError)
         return
     }
-    w.Write([]byte("Post created successfully"))
+    jsonSuccess(w, "Post created successfully")
 }
 func getPosts(w http.ResponseWriter, r *http.Request) {
     //  Read page from query param e.g. /get-posts?page=1
@@ -107,39 +102,35 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
     }
     json.NewEncoder(w).Encode(posts)
 }
+// In deletePost
 func deletePost(w http.ResponseWriter, r *http.Request) {
     id := r.URL.Query().Get("id")
-    email := r.Header.Get("X-User-Email") // - From header, not query param
+    email := r.Header.Get("X-User-Email")
 
     if id == "" || email == "" {
-        http.Error(w, "Missing data", http.StatusBadRequest)
+        jsonError(w, "Missing data", http.StatusBadRequest)
         return
     }
-
     var authorEmail string
     err := db.QueryRow("SELECT author_email FROM posts WHERE id = ?", id).Scan(&authorEmail)
     if err != nil {
-        http.Error(w, "Post not found", http.StatusNotFound)
+        jsonError(w, "Post not found", http.StatusNotFound)
         return
     }
-
     if authorEmail != email {
-        http.Error(w, "Unauthorized: not your post", http.StatusForbidden)
+        jsonError(w, "You can only delete your own posts", http.StatusForbidden)
         return
     }
-
     _, err = db.Exec("DELETE FROM posts WHERE id = ?", id)
     if err != nil {
-        http.Error(w, "Delete failed", http.StatusInternalServerError)
+        jsonError(w, "Delete failed", http.StatusInternalServerError)
         return
     }
-
-    w.Write([]byte("Post deleted successfully"))
+    jsonSuccess(w, "Post deleted successfully")
 }
-
 func updateBlog(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPut {
-        http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+        jsonError(w, "Invalid request method", http.StatusMethodNotAllowed)
         return
     }
 
@@ -147,7 +138,7 @@ func updateBlog(w http.ResponseWriter, r *http.Request) {
     email := r.Header.Get("X-User-Email")
 
     if id == "" {
-        http.Error(w, "ID is required", http.StatusBadRequest)
+        jsonError(w, "ID is required", http.StatusBadRequest)
         return
     }
 
@@ -155,44 +146,43 @@ func updateBlog(w http.ResponseWriter, r *http.Request) {
     var authorEmail string
     err := db.QueryRow("SELECT author_email FROM posts WHERE id = ?", id).Scan(&authorEmail)
     if err != nil {
-        http.Error(w, "Post not found", http.StatusNotFound)
+        jsonError(w, "Post not found", http.StatusNotFound)
         return
     }
     if authorEmail != email {
-        http.Error(w, "Unauthorized: not your post", http.StatusForbidden)
+        jsonError(w, "Unauthorized: not your post", http.StatusForbidden)
         return
     }
 
+    //    Decode FIRST, then validate
     var post struct {
         Title   string `json:"title"`
         Content string `json:"content"`
     }
+    if err := json.NewDecoder(r.Body).Decode(&post); err != nil {
+        jsonError(w, "Invalid data", http.StatusBadRequest)
+        return
+    }
 
     if errMsg := validatePost(post.Title, post.Content); errMsg != "" {
-        http.Error(w, errMsg, http.StatusBadRequest)
+        jsonError(w, errMsg, http.StatusBadRequest)
         return
     }
 
-    err = json.NewDecoder(r.Body).Decode(&post)
+    _, err = db.Exec(
+        "UPDATE posts SET title=?, content=? WHERE id=?",
+        strings.TrimSpace(post.Title), strings.TrimSpace(post.Content), id,
+    )
     if err != nil {
-        http.Error(w, "Invalid data", http.StatusBadRequest)
+        jsonError(w, "Database error", http.StatusInternalServerError)
         return
     }
 
-    _, err = db.Exec("UPDATE posts SET title=?, content=? WHERE id=?",
-        post.Title, post.Content, id)
-    if err != nil {
-        fmt.Println("UPDATE ERROR:", err)
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
-
-    w.Write([]byte("Blog updated successfully"))
+    jsonSuccess(w, "Blog updated successfully")
 }
-
 func register(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
-        http.Error(w, "Method not allowed", 405)
+        jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
     }
 
@@ -200,16 +190,13 @@ func register(w http.ResponseWriter, r *http.Request) {
         Name     string `json:"name"`
         Email    string `json:"email"`
         Password string `json:"password"`
-        Role     string `json:"role"` // "reader" or "writer"
+        Role     string `json:"role"`
     }
-
     json.NewDecoder(r.Body).Decode(&data)
 
-    // Default to reader if no role specified
     if data.Role != "writer" {
         data.Role = "reader"
     }
-    // default role will be reader
 
     hash, _ := bcrypt.GenerateFromPassword([]byte(data.Password), 10)
 
@@ -218,13 +205,12 @@ func register(w http.ResponseWriter, r *http.Request) {
         data.Name, data.Email, string(hash), data.Role,
     )
     if err != nil {
-        http.Error(w, "User already exists", 400)
+        jsonError(w, "User already exists", http.StatusBadRequest)
         return
     }
 
-    w.Write([]byte("User registered successfully"))
+    jsonSuccess(w, "User registered successfully")
 }
-
 func login(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
         http.Error(w, "Method not allowed", 405)
@@ -278,6 +264,22 @@ func validatePost(title, content string) string {
         return "Content must be under 5000 characters"
     }
     return "" // empty = valid
+}
+//    Consistent JSON error responses
+func jsonError(w http.ResponseWriter, message string, code int) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(code)
+    json.NewEncoder(w).Encode(map[string]string{
+        "error": message,
+    })
+}
+
+//  Consistent JSON success responses  
+func jsonSuccess(w http.ResponseWriter, message string) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{
+        "message": message,
+    })
 }
 
 func main() {

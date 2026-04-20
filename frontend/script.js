@@ -1,6 +1,28 @@
+//
+// STATE
+//
 let editingId = null;
+let postToDelete = null;
+let currentPage = 1;
 
-// - Helper: get session from localStorage
+//
+// AUTH GUARD — runs immediately on every page load
+//
+function guardRoute() {
+  const protectedPages = ["home.html"];
+  const currentPage = window.location.pathname.split("/").pop();
+  if (protectedPages.includes(currentPage)) {
+    if (!localStorage.getItem("userEmail")) {
+      alert("Please login first");
+      window.location.href = "index.html";
+    }
+  }
+}
+guardRoute();
+
+//
+// SESSION HELPERS
+//
 function getSession() {
   return {
     email: localStorage.getItem("userEmail"),
@@ -9,7 +31,6 @@ function getSession() {
   };
 }
 
-// - Helper: build auth headers
 function authHeaders() {
   const { email, role } = getSession();
   return {
@@ -19,7 +40,19 @@ function authHeaders() {
   };
 }
 
-//Renamed from register() to avoid browser built-in conflict
+//
+// RESPONSE HANDLER — parses JSON success/error from backend
+//
+function handleResponse(res) {
+  return res.json().then((data) => {
+    if (!res.ok) throw new Error(data.error || "Something went wrong");
+    return data.message || "Done";
+  });
+}
+
+//
+// AUTH — register, login, logout
+//
 function registerUser() {
   const nameVal = document.getElementById("name")?.value?.trim();
   const emailVal = document.getElementById("email")?.value?.trim();
@@ -27,7 +60,7 @@ function registerUser() {
   const roleVal = document.getElementById("role")?.value || "reader";
 
   if (!nameVal || !emailVal || !passwordVal) {
-    alert("Please fill in all fields");
+    showToast("Please fill in all fields", "error");
     return;
   }
 
@@ -41,106 +74,64 @@ function registerUser() {
       role: roleVal,
     }),
   })
-    .then((res) => {
-      if (!res.ok)
-        return res.text().then((t) => {
-          throw new Error(t);
-        });
-      return res.text();
-    })
+    .then(handleResponse)
     .then((msg) => {
-      alert(msg);
-      window.location.href = "index.html";
+      showToast(msg, "success");
+      setTimeout(() => (window.location.href = "index.html"), 1200);
     })
-    .catch((err) => alert("Signup failed: " + err.message));
+    .catch((err) => showToast("Signup failed: " + err.message, "error"));
 }
 
 function login() {
+  const emailVal = document.getElementById("loginEmail")?.value?.trim();
+  const passwordVal = document.getElementById("loginPassword")?.value;
+
+  if (!emailVal || !passwordVal) {
+    showToast("Please fill in all fields", "error");
+    return;
+  }
+
   fetch("http://localhost:8080/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: document.getElementById("loginEmail").value,
-      password: document.getElementById("loginPassword").value,
-    }),
+    body: JSON.stringify({ email: emailVal, password: passwordVal }),
   })
     .then((res) => {
-      if (!res.ok) throw new Error("Login failed");
-      return res.json(); // - Now returns JSON with role
+      if (!res.ok) throw new Error("Invalid email or password");
+      return res.json();
     })
     .then((user) => {
-      // - Store session
       localStorage.setItem("userEmail", user.email);
       localStorage.setItem("userRole", user.role);
       localStorage.setItem("userName", user.name);
       window.location.href = "home.html";
     })
-    .catch(() => alert("Invalid email or password"));
+    .catch((err) => showToast(err.message, "error"));
 }
 
 function logout() {
-  //it will remove all the tokens and sessions will be deleted to log out the user and also all the user information will be removed from the local storage and then it will redirect to the login page
   localStorage.removeItem("userEmail");
   localStorage.removeItem("userRole");
   localStorage.removeItem("userName");
-  // Default page will be the index.html
   window.location.href = "index.html";
 }
 
-function createPost() {
-  const title = document.getElementById("postTitle").value;
-  const content = document.getElementById("postContent").value;
-  const btn = document.querySelector(".editor-card button");
-
-  if (!title || !content) {
-    alert("Fill all fields");
-    return;
-  }
-
-  //  Disable button while request is in flight
-  btn.disabled = true;
-  btn.innerText = editingId ? "Updating..." : "Publishing...";
-  // to inform the user that the post is being published or updated
-
-  const url = editingId
-    ? `http://localhost:8080/update-blog?id=${editingId}`
-    : "http://localhost:8080/create-post";
-
-  const method = editingId ? "PUT" : "POST";
-  // Put will be used for updating the post and post will be used for the creation of the new post
-
-  fetch(url, {
-    method,
-    headers: authHeaders(),
-    body: JSON.stringify({ title, content }),
-  })
-    .then((res) => {
-      if (!res.ok)
-        return res.text().then((t) => {
-          throw new Error(t);
-        });
-      return res.text();
-    })
-    .then((msg) => {
-      showToast(msg, "success"); //  Toast instead of alert
-      resetEditor();
-      getPosts();
-    })
-    .catch((err) => {
-      showToast(err.message, "error");
-    })
-    .finally(() => {
-      btn.disabled = false;
-      btn.innerText = editingId ? "Update Post" : "Publish Story";
-    });
-}
-
+// POSTS — create, read, update, delete
+//
 function getPosts() {
   const { email, role } = getSession();
   const isWriter = role === "writer";
   const feed = document.getElementById("blogFeed");
 
-  //  Show loader while fetching
+  // Show/hide editor based on role
+  const editorCard = document.getElementById("editorCard");
+  if (editorCard) editorCard.style.display = isWriter ? "block" : "none";
+
+  // Show username in header
+  const usernameEl = document.getElementById("username");
+  if (usernameEl) usernameEl.textContent = getSession().name || "Reader";
+
+  // Loading state
   feed.innerHTML = `
     <div class="loading-state">
       <div class="spinner"></div>
@@ -148,35 +139,37 @@ function getPosts() {
     </div>
   `;
 
-  const editorCard = document.querySelector(".editor-card");
-  if (editorCard) editorCard.style.display = isWriter ? "block" : "none";
+  // Update pagination UI
+  document.getElementById("pageLabel").textContent = `Page ${currentPage}`;
+  document.getElementById("prevBtn").disabled = currentPage === 1;
 
-  const usernameEl = document.getElementById("username");
-  if (usernameEl)
-    usernameEl.textContent = localStorage.getItem("userName") || "Guest";
-
-  fetch("http://localhost:8080/get-posts")
+  fetch(`http://localhost:8080/get-posts?page=${currentPage}`)
     .then((res) => {
       if (!res.ok) throw new Error("Failed to load posts");
       return res.json();
     })
     .then((posts) => {
+      //    Fix: handle null response from Go when no posts exist
       if (!posts || posts.length === 0) {
         feed.innerHTML = `
           <div class="empty-state">
             <p>📭 No posts yet. Be the first to write!</p>
           </div>
         `;
+        document.getElementById("nextBtn").disabled = true;
         return;
       }
+
+      // Disable next if fewer results than page size (5)
+      document.getElementById("nextBtn").disabled = posts.length < 5;
 
       feed.innerHTML = posts
         .map((post) => {
           const isOwner = isWriter && post.author_email === email;
           const actions = isOwner
             ? `<div class="post-actions">
-                 <button onclick="editBlog(${post.id}, \`${post.title}\`, \`${post.content}\`)">Edit</button>
-                 <button class="delete-btn" onclick="deleteBlog(${post.id})">Delete</button>
+                <button onclick="editBlog(${post.id}, \`${post.title}\`, \`${post.content}\`)">✏️ Edit</button>
+                <button class="delete-btn" onclick="deleteBlog(${post.id})">🗑️ Delete</button>
                </div>`
             : "";
 
@@ -202,8 +195,7 @@ function getPosts() {
         })
         .join("");
     })
-    .catch((err) => {
-      //  Show error state
+    .catch(() => {
       feed.innerHTML = `
         <div class="error-state">
           <p>⚠️ Could not load posts. Please refresh.</p>
@@ -212,62 +204,152 @@ function getPosts() {
     });
 }
 
-function deleteBlog(id) {
-  fetch(`http://localhost:8080/delete-post?id=${id}`, {
-    method: "DELETE",
+function createPost() {
+  const title = document.getElementById("postTitle").value.trim();
+  const content = document.getElementById("postContent").value.trim();
+  const btn = document.getElementById("publishBtn");
+
+  if (!title || !content) {
+    showToast("Please fill in all fields", "error");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerText = editingId ? "Updating..." : "Publishing...";
+
+  const url = editingId
+    ? `http://localhost:8080/update-blog?id=${editingId}`
+    : "http://localhost:8080/create-post";
+
+  fetch(url, {
+    method: editingId ? "PUT" : "POST",
     headers: authHeaders(),
+    body: JSON.stringify({ title, content }),
   })
-    .then((res) => {
-      if (!res.ok)
-        return res.text().then((t) => {
-          throw new Error(t);
-        });
-      return res.text();
-    })
+    .then(handleResponse)
     .then((msg) => {
-      showToast(msg, "success"); //  Toast instead of alert
+      showToast(msg, "success");
+      resetEditor();
       getPosts();
     })
-    .catch((err) => showToast(err.message, "error"));
+    .catch((err) => showToast(err.message, "error"))
+    .finally(() => {
+      btn.disabled = false;
+      btn.innerText = editingId ? "Update Post" : "Publish Story";
+    });
 }
 
 function editBlog(id, title, content) {
   document.getElementById("postTitle").value = title;
   document.getElementById("postContent").value = content;
-  editingId = id;
 
-  const btn = document.querySelector(".editor-card button");
-  btn.innerText = "Update Post";
+  // Update counters to reflect loaded values
+  updateCounter("postTitle", "titleCounter", 150);
+  updateCounter("postContent", "contentCounter", 6000);
+
+  editingId = id;
+  document.getElementById("publishBtn").innerText = "Update Post";
+
+  // Scroll to editor
+  document.getElementById("editorCard").scrollIntoView({ behavior: "smooth" });
 }
 
 function resetEditor() {
   document.getElementById("postTitle").value = "";
   document.getElementById("postContent").value = "";
+  updateCounter("postTitle", "titleCounter", 100);
+  updateCounter("postContent", "contentCounter", 5000);
   editingId = null;
-
-  const btn = document.querySelector(".editor-card button");
-  btn.innerText = "Publish Story";
+  document.getElementById("publishBtn").innerText = "Publish Story";
 }
 
-//  Auth guard — runs on every page load
-function guardRoute() {
-  const protectedPages = ["home.html"];
-  const currentPage = window.location.pathname.split("/").pop();
+function deleteBlog(id) {
+  postToDelete = id;
+  document.getElementById("deleteModal").classList.add("modal-visible");
+}
 
-  if (protectedPages.includes(currentPage)) {
-    const email = localStorage.getItem("userEmail");
-    const role = localStorage.getItem("userRole");
+function closeModal() {
+  postToDelete = null;
+  document.getElementById("deleteModal").classList.remove("modal-visible");
+}
 
-    if (!email || !role) {
-      alert("Please login first");
-      window.location.href = "index.html";
+document.getElementById("confirmDelete").onclick = function () {
+  if (!postToDelete) return;
+
+  fetch(`http://localhost:8080/delete-post?id=${postToDelete}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  })
+    .then(handleResponse)
+    .then((msg) => {
+      showToast(msg, "success");
+      closeModal();
+      getPosts();
+    })
+    .catch((err) => {
+      showToast(err.message, "error");
+      closeModal();
+    });
+};
+
+// Close modal on Escape key
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+function filterPosts() {
+  const query = document
+    .getElementById("searchInput")
+    .value.toLowerCase()
+    .trim();
+  const cards = document.querySelectorAll(".post-card");
+  let visibleCount = 0;
+
+  cards.forEach((card) => {
+    const title = card.querySelector("h3").innerText.toLowerCase();
+    const content = card.querySelector("p").innerText.toLowerCase();
+    const matches = title.includes(query) || content.includes(query);
+    card.style.display = matches ? "block" : "none";
+    if (matches) visibleCount++;
+  });
+
+  const existing = document.getElementById("noSearchResult");
+  if (visibleCount === 0 && query !== "") {
+    if (!existing) {
+      const msg = document.createElement("div");
+      msg.id = "noSearchResult";
+      msg.className = "empty-state";
+      msg.innerText = `No posts found for "${query}"`;
+      document.getElementById("blogFeed").after(msg);
     }
+  } else {
+    if (existing) existing.remove();
   }
 }
 
-guardRoute(); //  Call immediately on script load
+function changePage(direction) {
+  currentPage += direction;
+  if (currentPage < 1) currentPage = 1;
+  getPosts();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
-//  Toast notification — replaces all alerts
+function updateCounter(inputId, counterId, max) {
+  const input = document.getElementById(inputId);
+  const counter = document.getElementById(counterId);
+  if (!input || !counter) return;
+
+  const length = input.value.length;
+  counter.textContent = `${length} / ${max}`;
+
+  if (length >= max) {
+    counter.style.color = "#ef4444";
+  } else if (length >= max * 0.85) {
+    counter.style.color = "#f59e0b";
+  } else {
+    counter.style.color = "#888";
+  }
+}
 function showToast(message, type = "success") {
   const existing = document.getElementById("toast");
   if (existing) existing.remove();
@@ -276,7 +358,6 @@ function showToast(message, type = "success") {
   toast.id = "toast";
   toast.className = `toast toast-${type}`;
   toast.innerText = message;
-
   document.body.appendChild(toast);
 
   setTimeout(() => toast.classList.add("toast-visible"), 10);
@@ -285,47 +366,3 @@ function showToast(message, type = "success") {
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
-//  Client-side search — no API call needed
-function filterPosts() {
-  const query = document.getElementById("searchInput").value.toLowerCase();
-  const cards = document.querySelectorAll(".post-card");
-
-  let visibleCount = 0;
-
-  cards.forEach((card) => {
-    const title = card.querySelector("h3").innerText.toLowerCase();
-    const content = card.querySelector("p").innerText.toLowerCase();
-    const matches = title.includes(query) || content.includes(query);
-
-    card.style.display = matches ? "block" : "none";
-    if (matches) visibleCount++;
-  });
-
-  //  Show "no results" if nothing matches
-  const noResult = document.getElementById("noSearchResult");
-  if (visibleCount === 0 && query !== "") {
-    if (!noResult) {
-      const msg = document.createElement("div");
-      msg.id = "noSearchResult";
-      msg.className = "empty-state";
-      msg.innerText = `No posts found for "${query}"`;
-      document.getElementById("blogFeed").after(msg);
-    }
-  } else {
-    if (noResult) noResult.remove();
-  }
-}
-let currentPage = 1;
-
-function changePage(direction) {
-  currentPage += direction;
-  if (currentPage < 1) currentPage = 1;
-  getPosts();
-}
-
-// Update getPosts fetch URL to include page
-fetch(`http://localhost:8080/get-posts?page=${currentPage}`)
-
-//  Update page label after fetch
-document.getElementById("pageLabel").innerText = `Page ${currentPage}`;
-document.getElementById("prevBtn").disabled = currentPage === 1;

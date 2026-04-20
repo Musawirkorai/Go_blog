@@ -1,43 +1,84 @@
-<link rel="stylesheet" href="style.css" />
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DevFeast — Home</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
 <body>
   <div class="home-container">
-    <header class="home-header">
-      <h1>DevFeast</h1>
-      <p>Welcome back, <strong id="username">Writer</strong></p>
 
-      <!-- // The logout function will be defined in script.js -->
+    <!-- HEADER -->
+    <header class="home-header">
+      <div class="header-left">
+        <h1>DevFeast</h1>
+        <p>Welcome back, <strong id="username">Writer</strong></p>
+      </div>
       <button onclick="logout()" class="logout-btn">Logout</button>
     </header>
 
-    <div class="editor-card">
+    <!-- EDITOR (writers only — hidden for readers via JS) -->
+    <div class="editor-card" id="editorCard">
       <h2>Create a Masterpiece</h2>
-      <input type="text" id="postTitle" placeholder="Catchy Title..." />
+
+      <input
+        type="text"
+        id="postTitle"
+        placeholder="Catchy Title..."
+        maxlength="100"
+        oninput="updateCounter('postTitle', 'titleCounter', 100)"
+      />
+      <div class="counter-row">
+        <span id="titleCounter" class="char-counter">0 / 100</span>
+      </div>
+
       <textarea
         id="postContent"
         placeholder="Write your thoughts here..."
+        rows="6"
+        oninput="updateCounter('postContent', 'contentCounter', 5000)"
       ></textarea>
-      <button onclick="createPost()">Publish Story</button>
+      <div class="counter-row">
+        <span id="contentCounter" class="char-counter">0 / 5000</span>
+      </div>
+
+      <button id="publishBtn" onclick="createPost()">Publish Story</button>
     </div>
+
+    <!-- SEARCH -->
     <div class="search-bar">
-      <input 
-        type="text" 
-        id="searchInput" 
-        placeholder="🔍 Search posts..." 
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="🔍 Search posts by title or content..."
         oninput="filterPosts()"
-      >
+      />
     </div>
-    <h2 style="margin-bottom: 25px;">The Feed</h2>
+
+    <!-- FEED -->
+    <h2 class="feed-title">The Feed</h2>
     <div id="blogFeed"></div>
+
+    <!-- PAGINATION -->
     <div class="pagination">
-    <button onclick="changePage(-1)" id="prevBtn">← Prev</button>
-    <span id="pageLabel">Page 1</span>
-    <button onclick="changePage(1)" id="nextBtn">Next →</button>
+      <button onclick="changePage(-1)" id="prevBtn" disabled>← Prev</button>
+      <span id="pageLabel">Page 1</span>
+      <button onclick="changePage(1)" id="nextBtn">Next →</button>
+    </div>
+
   </div>
 
-    
-<!-- 
-    <h2 style="margin-bottom: 25px">The Feed</h2>
-    <div id="blogFeed"></div> -->
+  <!-- DELETE CONFIRM MODAL -->
+  <div id="deleteModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>Delete Post?</h3>
+      <p>This action cannot be undone.</p>
+      <div class="modal-actions">
+        <button id="cancelDelete" onclick="closeModal()">Cancel</button>
+        <button id="confirmDelete" class="delete-btn">Yes, Delete</button>
+      </div>
+    </div>
   </div>
 
   <script src="script.js"></script>
@@ -45,3 +86,4 @@
     window.onload = getPosts;
   </script>
 </body>
+</html>
